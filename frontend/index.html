@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetTwin — сетевой комбайн</title>
+<link rel="icon" href="/nettwin.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="bg-blobs" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+
+<header class="topbar glass">
+  <div class="brand">
+    <img src="/nettwin.svg" alt="NetTwin" width="34" height="34">
+    <div class="brand-text">
+      <h1>NetTwin</h1>
+      <span>пассивный сетевой комбайн</span>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab active" data-tab="tester" role="tab">🔌 Тестер кабеля</button>
+    <button class="tab" data-tab="map" role="tab">🗺 Карта сети</button>
+    <button class="tab" data-tab="hosts" role="tab">📋 Паспорта</button>
+    <button class="tab" data-tab="help" role="tab">❓ Справка</button>
+  </nav>
+
+  <div class="top-actions">
+    <span class="status-dot" id="dot-api" title="Соединение с сервером"></span>
+    <span class="status-dot" id="dot-sniff" title="Пассивный радар"></span>
+    <button class="btn ghost" id="btn-backup" title="Скачать резервную копию всей карты">⬇ Бэкап</button>
+    <button class="btn ghost" id="btn-import" title="Загрузить резервную копию из файла">⬆ Импорт</button>
+    <input type="file" id="file-import" accept=".json" hidden>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= ВКЛАДКА 1: ЖИВОЙ ТЕСТЕР КАБЕЛЯ ================= -->
+  <section class="pane active" id="pane-tester">
+    <div class="pane-head">
+      <div>
+        <h2>Живой тестер кабеля</h2>
+        <p class="muted">Статус линка, скорость и дуплекс каждого USB-адаптера — обновляется каждые 2 секунды.</p>
+      </div>
+      <div class="legend-chips">
+        <span class="chip chip-green">1000 Мбит/с — гигабит</span>
+        <span class="chip chip-yellow">10/100 Мбит/с — жил мало</span>
+        <span class="chip chip-red">линка нет</span>
+      </div>
+    </div>
+
+    <div class="cards" id="iface-cards">
+      <div class="empty-state glass">
+        <div class="empty-ico">📡</div>
+        <div>Ожидаю данные от сервера…</div>
+      </div>
+    </div>
+
+    <div class="panel glass" id="measurements-panel">
+      <div class="panel-head">
+        <h3>📚 Сохранённые замеры</h3>
+        <span class="muted" id="measurements-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="measurements-table">
+          <thead>
+            <tr><th>Время</th><th>Адаптер</th><th>Скорость</th><th>Дуплекс</th><th>IP</th><th>Шлюз</th><th>Заметка</th><th></th></tr>
+          </thead>
+          <tbody><tr><td colspan="8" class="muted empty-cell">Замеров пока нет — нажмите «Сохранить замер» на карточке адаптера.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ВКЛАДКА 2: КАРТА СЕТИ И КОМНАТ ================= -->
+  <section class="pane" id="pane-map">
+    <div class="map-toolbar glass">
+      <button class="btn" id="btn-add-node" title="Добавить устройство вручную">➕ Устройство</button>
+      <button class="btn" id="btn-connect" title="Соединить два устройства кабелем">🔗 Соединить</button>
+      <button class="btn" id="btn-add-room" title="Добавить зону-комнату">🏠 Комната</button>
+      <span class="toolbar-sep"></span>
+      <button class="btn danger" id="btn-delete-sel" title="Удалить выбранное">🗑 Удалить</button>
+      <span class="toolbar-sep"></span>
+      <button class="btn ghost" id="btn-fit" title="Показать всю карту">⤢ Вписать</button>
+      <span class="muted toolbar-hint" id="map-hint">Перетаскивайте узлы мышкой — позиции сохраняются автоматически.</span>
+    </div>
+
+    <div class="map-wrap panel glass">
+      <div id="cy"></div>
+
+      <!-- Панель «Я сейчас у точки / свитча» -->
+      <aside class="side-panel glass" id="session-panel">
+        <div class="panel-head">
+          <h3>👂 Я сейчас у точки / свитча</h3>
+          <button class="icon-btn" id="session-close" title="Свернуть">✕</button>
+        </div>
+        <p class="muted small">Встаньте с ноутбуком у неуправляемого свитча, воткните его патч-кордом в свитч и запишите комнату:
+          все устройства, которые пассивный радар услышит за время прослушивания, автоматически появятся на карте вокруг этой точки.</p>
+        <label class="field">
+          <span>Название точки</span>
+          <input type="text" id="session-label" placeholder="Например: Отдел Упаковка — Свитч №1">
+        </label>
+        <label class="field">
+          <span>Слушать через адаптер</span>
+          <select id="session-iface"></select>
+        </label>
+        <label class="field">
+          <span>Длительность</span>
+          <select id="session-duration">
+            <option value="15">15 секунд</option>
+            <option value="30" selected>30 секунд</option>
+            <option value="60">1 минута</option>
+            <option value="120">2 минуты</option>
+          </select>
+        </label>
+        <button class="btn primary wide" id="btn-session-start">▶ Слушать точку (30 сек)</button>
+
+        <div class="session-active" id="session-active" hidden>
+          <div class="progress"><div class="progress-bar" id="session-progress"></div></div>
+          <div class="session-row">
+            <span id="session-countdown">–</span>
+            <span id="session-found">Найдено: 0</span>
+          </div>
+          <div class="session-log" id="session-log"></div>
+          <button class="btn danger wide" id="btn-session-stop">■ Остановить</button>
+        </div>
+      </aside>
+
+      <!-- Инспектор выбранного элемента -->
+      <aside class="side-panel right glass" id="inspector" hidden>
+        <div class="panel-head">
+          <h3 id="inspector-title">Элемент</h3>
+          <button class="icon-btn" id="inspector-close" title="Закрыть">✕</button>
+        </div>
+        <div id="inspector-body"></div>
+      </aside>
+
+      <!-- Панель соединения -->
+      <div class="connect-hint glass" id="connect-hint" hidden></div>
+
+      <div class="map-legend glass">
+        <span class="lg"><i style="background:#c47f17"></i> свитч/точка</span>
+        <span class="lg"><i style="background:#30d158"></i> ПК</span>
+        <span class="lg"><i style="background:#bf5af2"></i> принтер</span>
+        <span class="lg"><i style="background:#ff9f0a"></i> сетевое</span>
+        <span class="lg"><i style="background:#0a84ff"></i> точка доступа</span>
+        <span class="lg"><i style="background:#64d2ff"></i> камера</span>
+        <span class="lg"><i style="background:#7d8a9c"></i> неизвестно</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ВКЛАДКА 3: ПАСПОРТА ПК ================= -->
+  <section class="pane" id="pane-hosts">
+    <div class="pane-head">
+      <div>
+        <h2>Паспорта ПК и принтеров</h2>
+        <p class="muted">Все устройства, найденные радаром, и паспорта, собранные агентом с флешки.</p>
+      </div>
+      <div class="hosts-actions">
+        <button class="btn" id="btn-agent-win">⬇ Агент Windows (.bat)</button>
+        <button class="btn" id="btn-agent-linux">⬇ Агент Linux (.sh)</button>
+        <a class="btn ghost" href="/api/export/hosts.csv" download>📊 Экспорт CSV</a>
+      </div>
+    </div>
+
+    <div class="panel glass">
+      <div class="hosts-controls">
+        <input type="search" id="hosts-search" class="search" placeholder="🔍 Поиск по имени, IP, MAC, модели, серийнику…">
+        <div class="filter-chips" id="hosts-filters">
+          <button class="chip active" data-type="">Все</button>
+          <button class="chip" data-type="pc">💻 ПК</button>
+          <button class="chip" data-type="printer">🖨 Принтеры</button>
+          <button class="chip" data-type="network">🌐 Сетевое</button>
+          <button class="chip" data-type="camera">📷 Камеры</button>
+          <button class="chip" data-type="phone">☎ Телефоны</button>
+          <button class="chip" data-type="passport">🪪 С паспортом</button>
+        </div>
+        <span class="muted" id="hosts-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="hosts-table">
+          <thead>
+            <tr>
+              <th>Имя</th><th>IP</th><th>MAC</th><th>Тип</th><th>Производитель</th>
+              <th>Модель</th><th>CPU</th><th>RAM</th><th>ОС</th><th>Серийник</th>
+              <th>Активность</th><th></th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="12" class="muted empty-cell">Загружаю…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ВКЛАДКА 4: СПРАВКА ================= -->
+  <section class="pane" id="pane-help">
+    <div class="help-wrap">
+
+      <div class="panel glass help-card">
+        <h2>🛡 Как работает NetTwin — и почему это безопасно</h2>
+        <p>NetTwin — <b>полностью пассивный</b> инструмент. Он <b>никогда ничего не отправляет</b> в сеть:
+        ни ping, ни сканирование портов, ни ARP-запросы. Никаких nmap / arp-scan / fping.</p>
+        <p>Радар только <b>слушает</b> эфирный трафик, который и так летает мимо ноутбука:</p>
+        <ul class="proto-list">
+          <li><b>ARP</b> — устройства сами объявляют пары «IP ↔ MAC»;</li>
+          <li><b>mDNS</b> — принтеры и ПК сами рассказывают о себе (имя, модель, сервисы);</li>
+          <li><b>DHCP</b> — клиенты сами просят адрес (видно имя, вендора, шлюз, DNS);</li>
+          <li><b>LLDP/CDP</b> — управляемые свитчи сами представляются соседям.</li>
+        </ul>
+        <p class="ok-note">Поэтому корпоративные системы защиты (IDS/IPS, порт-секьюрити) не видят NetTwin:
+        для сети он выглядит как молчащий ноутбук, который просто слушает.</p>
+      </div>
+
+      <div class="panel glass help-card">
+        <h2>🔌 Как проверять кабель</h2>
+        <ol class="steps">
+          <li>Воткните один конец кабеля в порт проверяемого свитча (или ПК), второй — в USB-адаптер ноутбука.</li>
+          <li>Откройте вкладку <b>«Тестер кабеля»</b> — карточка адаптера загорится через 1–2 секунды.</li>
+          <li>Смотрите на цвет:
+            <div class="legend-chips" style="margin-top:8px">
+              <span class="chip chip-green">ярко-зелёный — гигабит, кабель обжат всеми 8 жилами 👍</span>
+              <span class="chip chip-yellow">жёлтый — линк есть, но скорость 10/100: где-то обрыв 4 жил, плохой коннектор или порт свитча настроен на 100 Мбит/с</span>
+              <span class="chip chip-red">красный — линка нет: кабель не вставлен, пережат, перепутаны пары или порт выключен</span>
+            </div>
+          </li>
+          <li>При жёлтом цвете: пережмите оба конца коннекторами RJ-45 (схема T568B, все 8 жил) и проверьте порт свитча.</li>
+          <li>Нажмите <b>«Сохранить замер»</b>, чтобы оставить заметку (например, «кабель №14, патч-панель 2») — замер попадёт в историю ниже карточек.</li>
+        </ol>
+        <p class="muted">На карточке также видно: полученный IP и маску, шлюз, DNS, чип USB-адаптера и имя соседа по LLDP (если свитч управляемый).</p>
+      </div>
+
+      <div class="panel glass help-card">
+        <h2>🗺 Как снять комнату через неуправляемый свитч</h2>
+        <ol class="steps">
+          <li>Придите к свитчу комнаты, воткните патч-корд от его свободного порта в USB-адаптер ноутбука.</li>
+          <li>Вкладка <b>«Карта сети»</b> → правая панель <b>«Я сейчас у точки / свитча»</b>.</li>
+          <li>Введите название, например <i>«Отдел Упаковка — Свитч №1»</i>, выберите адаптер и нажмите <b>«Слушать точку»</b>.</li>
+          <li>30 секунд радар пассивно слушает: каждый встрявший в кадр ARP/mDNS/DHCP становится узлом карты и автоматически соединяется линией с иконкой вашего свитча.</li>
+          <li>После остановки расставьте узлы мышкой, создайте <b>комнату</b> (🏠), перетащите устройства внутрь — принадлежность комнате запомнится.</li>
+          <li>Кабели можно подписывать и раскрашивать: кликните по линии и заполните панель справа. Удобный стандарт: <span style="color:#ffd60a">жёлтый = плохой обжим</span>, <span style="color:#30d158">зелёный = проверен, гигабит</span>.</li>
+          <li>Не забудьте <b>⬇ Бэкап</b> (вверху справа) — файл JSON скопируйте на флешку.</li>
+        </ol>
+        <p class="muted">Совет: в комнате, где пользователи активно работают, 30 секунд обычно достаточно. Если тихо — попросите коллег включить ПК или запустить печать, либо повторите прослушивание ещё раз.</p>
+      </div>
+
+      <div class="panel glass help-card">
+        <h2>🪪 Паспорта ПК и агент для флешки</h2>
+        <ol class="steps">
+          <li>Вкладка <b>«Паспорта»</b> → кнопка <b>«⬇ Агент Windows (.bat)»</b> или <b>«⬇ Агент Linux (.sh)»</b>.</li>
+          <li>Скрипт сохранится на ноутбук — скопируйте его на флешку (удобно держать в Ventoy-меню).</li>
+          <li>На новом ПК запустите скрипт двойным щелчком. Он соберёт модель, серийник, CPU, RAM, MAC-адреса и ОС.</li>
+          <li>Если ноутбук NetTwin доступен по сети — паспорт улетит на сервер мгновенно. Если нет — скрипт сохранит JSON-файл рядом с собой, привезите его и импортируйте кнопкой <b>⬆ Импорт</b>.</li>
+          <li>Для отчётов используйте <b>«Экспорт CSV»</b> — файл открывается в Excel с кириллицей без танцев.</li>
+        </ol>
+      </div>
+
+      <div class="panel glass help-card">
+        <h2>💾 Резервная копия и восстановление</h2>
+        <ul class="steps" style="list-style:none;padding-left:0">
+          <li>📦 <b>⬇ Бэкап</b> — скачивает один JSON-файл со всей картой: устройства, узлы, связи, комнаты, замеры, LLDP-соседи. Копируйте его на флешку после каждой смены.</li>
+          <li>♻️ <b>⬆ Импорт</b> — восстанавливает карту из файла. Режим «объединить» дописывает к текущей карте, «заменить» — полностью восстанавливает состояние на момент бэкапа.</li>
+          <li>🧾 Импорт также понимает JSON-файлы, сохранённые агентом офлайн.</li>
+          <li>🖥 Управление сервисом: логи <code>docker compose logs -f nettwin</code>, перезапуск <code>docker compose restart nettwin</code>, полная инструкция — в <code>README_RU.md</code>.</li>
+        </ul>
+      </div>
+
+      <div class="panel glass help-card">
+        <h2>🎨 Цвета и значки</h2>
+        <div class="legend-grid">
+          <div><i style="background:#c47f17"></i> 🔌 свитч / точка прослушивания</div>
+          <div><i style="background:#30d158"></i> 💻 ПК / ноутбук</div>
+          <div><i style="background:#bf5af2"></i> 🖨 принтер / МФУ</div>
+          <div><i style="background:#ff9f0a"></i> 🌐 сетевое оборудование</div>
+          <div><i style="background:#0a84ff"></i> 📶 точка доступа Wi-Fi</div>
+          <div><i style="background:#64d2ff"></i> 📷 камера</div>
+          <div><i style="background:#32ade6"></i> ☎ IP-телефон</div>
+          <div><i style="background:#7d8a9c"></i> ❓ тип не определён (можно задать вручную в паспорте)</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer glass">
+  <span id="footer-status">Соединение…</span>
+  <span class="footer-right">
+    <span id="footer-stats"></span>
+    <span id="clock"></span>
+  </span>
+</footer>
+
+<!-- Модальное окно -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal glass">
+    <h3 id="modal-title"></h3>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modal-cancel">Отмена</button>
+      <button class="btn primary" id="modal-ok">ОК</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+  // Если локальная копия Cytoscape не загрузилась (например, образ собрали без интернета) — берём с CDN.
+  function __loadCyFallback() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js';
+    document.head.appendChild(s);
+  }
+</script>
+<script src="/vendor/cytoscape.min.js" onerror="__loadCyFallback()"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

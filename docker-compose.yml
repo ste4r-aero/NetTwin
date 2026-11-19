@@ -1,0 +1,28 @@
+# NetTwin — локальный сетевой комбайн для системного администратора.
+# Контейнер работает в сети хоста (network_mode: host), чтобы напрямую
+# видеть USB-Ethernet адаптеры и слушать трафик пассивно (без отправки пакетов).
+services:
+  nettwin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nettwin:latest
+    container_name: nettwin
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      TZ: "Europe/Moscow"
+      NETTWIN_DB: "/data/nettwin.db"
+      # Пассивный фильтр: только прослушивание, НИКАКИХ исходящих пакетов.
+      NETTWIN_BPF_FILTER: "arp or udp port 5353 or udp port 67 or ether proto 0x88cc"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
