@@ -277,7 +277,7 @@ const posTimers = {};
 function nodeElData(n) {
   if (n.kind === 'room') {
     return {
-      id: 'n' + n.id, label: '🏠 ' + (n.label || n.name || 'Комната'),
+      id: 'r' + n.id, label: '🏠 ' + (n.label || n.name || 'Комната'),
       kind: 'room', color: n.color || 'rgba(255,255,255,0.5)',
       w: n.w || 460, h: n.h || 340, raw: Object.assign({}, n, { kind: 'room' })
     };
@@ -707,7 +707,7 @@ function sessionCatch(host) {
 /* ---------- Живое обновление карты по WS ---------- */
 function applyMapNode(node) {
   if (!cy) return;
-  const existing = cy.getElementById('n' + node.id);
+  const existing = cy.getElementById((node.kind === 'room' ? 'r' : 'n') + node.id);
   if (existing.length) {
     existing.data('raw', node);
     if (node.kind === 'room') {
