@@ -399,3 +399,5 @@ textarea { resize: vertical; min-height: 60px; }
   .legend-grid { grid-template-columns: 1fr; }
   .side-panel { width: 270px; }
 }
+
+[hidden] { display: none !important; }
